@@ -1,169 +1,59 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Search, Filter } from "lucide-react";
 import ComponentCard from "./ComponentCard";
+import type { Component } from "@shared/schema";
 
 const categories = [
-  { name: "All", count: 24 },
-  { name: "Buttons", count: 8 },
-  { name: "Cards", count: 6 },
-  { name: "Navigation", count: 4 },
-  { name: "Animations", count: 6 }
+  { name: "All" },
+  { name: "Buttons" },
+  { name: "Cards" },
+  { name: "Navigation" },
+  { name: "Animations" }
 ];
 
-//todo: remove mock functionality
-const mockComponents = [
-  {
-    title: "Floating Action Button",
-    description: "An elevated button that triggers the primary action in your app",
-    category: "Buttons",
-    difficulty: "Beginner" as const,
-    previewCode: `@Composable
-fun FloatingActionButton() {
-    FloatingActionButton(
-        onClick = { }
-    ) {
-        Icon(Icons.Default.Add, "Add")
-    }
-}`,
-    fullCode: `@Composable
-fun CustomFloatingActionButton(
-    onClick: () -> Unit,
-    icon: ImageVector,
-    contentDescription: String?,
-    modifier: Modifier = Modifier
-) {
-    FloatingActionButton(
-        onClick = onClick,
-        modifier = modifier,
-        backgroundColor = MaterialTheme.colors.primary
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = MaterialTheme.colors.onPrimary
-        )
-    }
-}`,
-    tags: ["FAB", "Material", "Action"]
-  },
-  {
-    title: "Animated Card",
-    description: "A card with smooth animations and gesture support",
-    category: "Cards",
-    difficulty: "Intermediate" as const,
-    previewCode: `@Composable
-fun AnimatedCard() {
-    Card(
-        modifier = Modifier
-            .animateContentSize()
-    ) {
-        // Card content
-    }
-}`,
-    fullCode: `@Composable
-fun AnimatedCard(
-    expanded: Boolean,
-    onExpandClick: () -> Unit,
-    title: String,
-    content: String
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .animateContentSize(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessLow
-                )
-            )
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.h6
-                )
-                IconButton(onClick = onExpandClick) {
-                    Icon(
-                        imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                        contentDescription = null
-                    )
-                }
-            }
-            if (expanded) {
-                Text(
-                    text = content,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-            }
-        }
-    }
-}`,
-    tags: ["Animation", "Card", "Expandable"]
-  },
-  {
-    title: "Bottom Navigation",
-    description: "Material Design bottom navigation with smooth transitions",
-    category: "Navigation",
-    difficulty: "Advanced" as const,
-    previewCode: `@Composable
-fun BottomNavigation() {
-    BottomNavigation {
-        // Navigation items
-    }
-}`,
-    fullCode: `@Composable
-fun CustomBottomNavigation(
-    items: List<BottomNavItem>,
-    selectedItem: Int,
-    onItemSelected: (Int) -> Unit
-) {
-    BottomNavigation(
-        backgroundColor = MaterialTheme.colors.surface,
-        contentColor = MaterialTheme.colors.onSurface
-    ) {
-        items.forEachIndexed { index, item ->
-            BottomNavigationItem(
-                icon = {
-                    Icon(
-                        imageVector = item.icon,
-                        contentDescription = item.label
-                    )
-                },
-                label = { Text(item.label) },
-                selected = selectedItem == index,
-                onClick = { onItemSelected(index) },
-                selectedContentColor = MaterialTheme.colors.primary,
-                unselectedContentColor = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
-            )
-        }
-    }
-}`,
-    tags: ["Navigation", "Material", "Bottom"]
-  }
-];
+// Transform API component to ComponentCard props
+const transformComponent = (component: Component) => ({
+  title: component.name,
+  description: component.description,
+  category: component.category,
+  difficulty: 'Intermediate' as const, // Default for now
+  previewCode: component.code.split('\n').slice(0, 8).join('\n') + '\n    // ...',
+  fullCode: component.code,
+  tags: component.tags || []
+});
 
 export default function ComponentGallery() {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const filteredComponents = mockComponents.filter(component => {
-    const matchesCategory = selectedCategory === "All" || component.category === selectedCategory;
-    const matchesSearch = component.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         component.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         component.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesCategory && matchesSearch;
+  // Fetch components from API
+  const { data: components = [], isLoading } = useQuery<Component[]>({
+    queryKey: ['/api/components', selectedCategory],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (selectedCategory !== "All") {
+        params.append('category', selectedCategory);
+      }
+      const url = `/api/components${params.toString() ? '?' + params.toString() : ''}`;
+      return fetch(url).then(res => res.json());
+    },
   });
+
+  // Filter components by search query
+  const filteredComponents = components
+    .filter(component => {
+      if (!searchQuery) return true;
+      const query = searchQuery.toLowerCase();
+      return component.name.toLowerCase().includes(query) ||
+             component.description.toLowerCase().includes(query) ||
+             component.tags?.some(tag => tag.toLowerCase().includes(query));
+    })
+    .map(transformComponent);
 
   return (
     <section id="components" className="py-24 bg-muted/30">
@@ -198,24 +88,30 @@ export default function ComponentGallery() {
 
             {/* Categories */}
             <div className="flex flex-wrap gap-2">
-              {categories.map((category) => (
-                <Button
-                  key={category.name}
-                  variant={selectedCategory === category.name ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => {
-                    setSelectedCategory(category.name);
-                    console.log('Category selected:', category.name);
-                  }}
-                  data-testid={`category-${category.name.toLowerCase()}`}
-                  className="gap-1"
-                >
-                  {category.name}
-                  <Badge variant="secondary" className="ml-1 text-xs">
-                    {category.count}
-                  </Badge>
-                </Button>
-              ))}
+              {categories.map((category) => {
+                const count = category.name === "All" 
+                  ? components.length 
+                  : components.filter(c => c.category === category.name).length;
+                
+                return (
+                  <Button
+                    key={category.name}
+                    variant={selectedCategory === category.name ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setSelectedCategory(category.name);
+                      console.log('Category selected:', category.name);
+                    }}
+                    data-testid={`category-${category.name.toLowerCase()}`}
+                    className="gap-1"
+                  >
+                    {category.name}
+                    <Badge variant="secondary" className="ml-1 text-xs">
+                      {count}
+                    </Badge>
+                  </Button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -234,7 +130,23 @@ export default function ComponentGallery() {
         </div>
 
         {/* Component Grid */}
-        {filteredComponents.length > 0 ? (
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <Card key={i} className="h-80">
+                <CardContent className="p-6 animate-pulse">
+                  <div className="h-4 bg-muted rounded mb-2" />
+                  <div className="h-3 bg-muted rounded w-3/4 mb-4" />
+                  <div className="h-20 bg-muted rounded mb-4" />
+                  <div className="flex gap-2">
+                    <div className="h-6 bg-muted rounded w-16" />
+                    <div className="h-6 bg-muted rounded w-12" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : filteredComponents.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredComponents.map((component, index) => (
               <ComponentCard key={index} {...component} />

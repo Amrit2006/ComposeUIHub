@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,6 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, FileCode, X, CheckCircle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import type { InsertComponent } from "@shared/schema";
 
 interface UploadedFile {
   name: string;
@@ -22,8 +26,33 @@ export default function UploadSection() {
   const [category, setCategory] = useState("");
   const [difficulty, setDifficulty] = useState("");
   const [tags, setTags] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const uploadMutation = useMutation({
+    mutationFn: async (component: InsertComponent) => {
+      const response = await apiRequest('POST', '/api/components', component);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/components'] });
+      setSubmitted(true);
+      toast({
+        title: "Success!",
+        description: "Your component has been uploaded successfully.",
+      });
+    },
+    onError: (error) => {
+      console.error('Upload error:', error);
+      toast({
+        title: "Upload Failed",
+        description: "There was an error uploading your component. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -77,36 +106,29 @@ export default function UploadSection() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!componentName || !description || uploadedFiles.length === 0) {
-      console.log('Missing required fields');
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields and upload at least one file.",
+        variant: "destructive",
+      });
       return;
     }
 
-    setIsSubmitting(true);
-    console.log('Submitting component:', {
-      componentName,
+    // Combine all uploaded file contents (take the main component code)
+    const mainCode = uploadedFiles.map(file => file.content).join('\n\n');
+    
+    const componentData: InsertComponent = {
+      name: componentName,
       description,
-      category,
-      difficulty,
-      tags: tags.split(',').map(t => t.trim()),
-      files: uploadedFiles
-    });
+      category: category || 'Other',
+      code: mainCode,
+      tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+      authorName: 'Anonymous', // Could be made configurable
+      previewImage: null
+    };
 
-    // Simulate upload
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    setIsSubmitting(false);
-    setSubmitted(true);
-    
-    // Reset form after success
-    setTimeout(() => {
-      setSubmitted(false);
-      setComponentName("");
-      setDescription("");
-      setCategory("");
-      setDifficulty("");
-      setTags("");
-      setUploadedFiles([]);
-    }, 3000);
+    console.log('Submitting component:', componentData);
+    uploadMutation.mutate(componentData);
   };
 
   if (submitted) {
@@ -120,7 +142,15 @@ export default function UploadSection() {
               <p className="text-muted-foreground mb-6">
                 Your component will be reviewed and published soon.
               </p>
-              <Button onClick={() => setSubmitted(false)} data-testid="upload-another">
+              <Button onClick={() => {
+                setSubmitted(false);
+                setComponentName("");
+                setDescription("");
+                setCategory("");
+                setDifficulty("");
+                setTags("");
+                setUploadedFiles([]);
+              }} data-testid="upload-another">
                 Upload Another Component
               </Button>
             </CardContent>
@@ -292,11 +322,11 @@ export default function UploadSection() {
             <Button
               type="submit"
               size="lg"
-              disabled={isSubmitting || !componentName || !description || uploadedFiles.length === 0}
+              disabled={uploadMutation.isPending || !componentName || !description || uploadedFiles.length === 0}
               data-testid="submit-component"
               className="min-w-48"
             >
-              {isSubmitting ? "Uploading..." : "Upload Component"}
+              {uploadMutation.isPending ? "Uploading..." : "Upload Component"}
             </Button>
           </div>
         </form>
