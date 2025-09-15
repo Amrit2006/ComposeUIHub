@@ -59,7 +59,9 @@ export class MemStorage implements IStorage {
     const component: Component = { 
       ...insertComponent, 
       id, 
-      createdAt: new Date() 
+      createdAt: new Date(),
+      previewImage: insertComponent.previewImage || null,
+      tags: insertComponent.tags || null
     };
     this.components.set(id, component);
     return component;
@@ -231,7 +233,9 @@ fun FadeInAnimation(
       const fullComponent: Component = { 
         ...component, 
         id, 
-        createdAt: new Date() 
+        createdAt: new Date(),
+        previewImage: component.previewImage || null,
+        tags: component.tags || null
       };
       this.components.set(id, fullComponent);
     });

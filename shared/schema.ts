@@ -16,7 +16,7 @@ export const components = pgTable("components", {
   description: text("description").notNull(),
   code: text("code").notNull(),
   previewImage: text("preview_image"),
-  tags: text("tags").array().default([]),
+  tags: text("tags").array(),
   authorName: text("author_name").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
